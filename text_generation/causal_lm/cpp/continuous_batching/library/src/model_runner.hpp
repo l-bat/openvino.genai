@@ -16,6 +16,7 @@
 class ModelRunner {
     ov::InferRequest m_request;
     SchedulerConfig m_scheduler_config;
+    std::unordered_map<int, std::unordered_map<int, CacheEvictionAlgorithm> m_eviction_algo_map;
 public:
     ModelRunner(ov::InferRequest request, const SchedulerConfig& scheduler_config) :
         m_request(request),
@@ -30,6 +31,9 @@ public:
         size_t batch_size_in_sequences = 0;
         size_t total_num_tokens = 0, total_num_blocks = 0;
         size_t max_context_len_val = 0;
+        if (m_eviction_algo_map.empty()) {
+            m_eviction_algo_map.reserve(num_sequence_groups);
+        }
 
         // compute aggregated values
         for (size_t i = 0; i < num_sequence_groups; ++i) {
@@ -68,10 +72,12 @@ public:
         subsequence_begins_data[0] = 0;
         block_indices_begins_data[0] = 0;
 
+        CacheEvictionConfig eviction_config(m_scheduler_config.block_size);
         for (size_t i = 0; i < num_sequence_groups; ++i) {
             size_t seq_group_id = scheduler_output.m_scheduled_sequence_groups_ids[i];
             SequenceGroup::CPtr sequence_group = sequence_groups[seq_group_id];
-            std::vector<Sequence::CPtr> running_sequences = sequence_group->get_running_sequences();
+            std::vector<Sequence::CPtr> sequences = sequence_group->get_sequences();
+            // std::vector<Sequence::CPtr> running_sequences = sequence_group->get_running_sequences();
             size_t num_running_sequences = running_sequences.size();
             size_t num_scheduled_tokens = sequence_group->get_num_scheduled_tokens();
             size_t num_blocks = sequence_group->get_num_blocks();
@@ -79,8 +85,24 @@ public:
                 // spec: In case of multiple input tokens for current sequence (prompt_len > 1), context_len corresponds to first token within subgroup of scheduled tokens
                 group_context_len = group_position_id;
 
-            for (size_t seq_id = 0; seq_id < num_running_sequences; ++seq_id) {
-                Sequence::CPtr sequence = running_sequences[seq_id];
+            // for (size_t seq_id = 0; seq_id < num_running_sequences; ++seq_id) {
+            for (size_t seq_id = 0; seq_id < sequences.size(); ++seq_id) {
+                Sequence::CPtr sequence = sequences[seq_id];
+                if (!sequence->is_running()) {
+                    continue;
+                }
+
+                CacheEvictionAlgorithm eviction_algo = CacheEvictionAlgorithm(eviction_config);
+                if (m_eviction_algo_map.contains(i)) {
+                    if (m_eviction_algo_map[i].contains(seq_id) {
+                        eviction_algo = m_eviction_algo_map[i][seq_id];
+                    } else {
+                        m_eviction_algo_map[i][seq_id] = eviction_algo;
+                    }
+                } else {
+                    m_eviction_algo_map[i] = std::unordered_map<int, CacheEvictionAlgorithm>();
+                    m_eviction_algo_map[i][seq_id] = eviction_algo;
+                }
 
                 for (size_t token_id = 0, position_id = group_position_id; token_id < num_scheduled_tokens; ++token_id, ++position_id) {
                     // compute token for current sequence
@@ -88,24 +110,36 @@ public:
                         sequence_group->get_prompt_ids()[position_id] :
                         sequence->get_generated_ids()[position_id - sequence_group->get_prompt_len()];
 
-                    position_ids_data[token_id] = position_id;
+                    // TODO: Adjust position_ids
+                    if (position_id >= sequence_group->get_prompt_len()) {
+                        position_ids_data[token_id] = position_id - eviction_algo.num_evicted_tokens;
+                    } else {
+                        position_ids_data[token_id] = position_id;
+                    }
                 }
 
-                past_lens_data[0] = group_context_len;
+                past_lens_data[0] = group_context_len;  // Should be adjusted after eviction?
 
                 subsequence_begins_data[1] = subsequence_begins_data[0] + num_scheduled_tokens;
                 block_indices_begins_data[1] = block_indices_begins_data[0] + num_blocks;
 
                 const std::vector<KVCacheBlock::Ptr> & kv_blocks = scheduler_output.m_block_tables.at(sequence->get_id());
-                for (size_t block_id = 0; block_id < num_blocks; ++block_id)
-                    block_indices_data[block_id] = kv_blocks[block_id]->get_index();
+                if (sequence->can_generate_tokens()) { // prefill phase has been finished
+                    auto remaining_block_indices = eviction_algo.apply(attention_scores);
+                    // num_evicted_tokens += remaining_block_indices.size() * sequence_group->get_block_size();
+                    for (size_t block_id : remaining_block_indices)
+                        block_indices_data[block_id] = kv_blocks[block_id]->get_index();
+                } else {
+                    for (size_t block_id = 0; block_id < num_blocks; ++block_id)
+                        block_indices_data[block_id] = kv_blocks[block_id]->get_index();
+                }
 
                 // apply strides to shift to a next sequence
                 input_ids_data += num_scheduled_tokens;
                 position_ids_data += num_scheduled_tokens;
                 past_lens_data += 1;
                 subsequence_begins_data += 1;
-                block_indices_data += num_blocks;
+                block_indices_data += num_blocks; // remaining_block_indices.size()
                 block_indices_begins_data += 1;
             }
         }
