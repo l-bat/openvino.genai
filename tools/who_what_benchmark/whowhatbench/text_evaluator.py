@@ -143,7 +143,14 @@ class TextEvaluator(BaseEvaluator):
 
             if use_chat_template:
                 message = [{"role": "user", "content": prompt}]
-                inputs = tokenizer.apply_chat_template(message, tokenize=True, add_generation_prompt=True, return_tensors="pt", return_dict=True).to(device)
+                inputs = tokenizer.apply_chat_template(
+                    message,
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    return_tensors="pt",
+                    return_dict=True,
+                    enable_thinking=False,
+                ).to(device)
             else:
                 inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
 
