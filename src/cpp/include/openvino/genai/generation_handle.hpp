@@ -37,6 +37,12 @@ struct EncodedGenerationResult {
     
     // PerfMetrics but with empty tokenization/detokenization durations.
     PerfMetrics perf_metrics;
+
+    // PerfMetrics with pipeline specifics metrics and empty tokenization/detokenization durations.
+    // Applicable for pipelines with implemented extended metrics: SpeculativeDecoding Pipeline
+    // To get metrics, it should be cast to corresponding class for extended perf metrics from pipeline
+    // Cast to SDPerModelsPerfMetrics for SpeculativeDecoding
+    std::shared_ptr<ExtendedPerfMetrics> extended_perf_metrics;
 };
 
 enum class GenerationFinishReason {
@@ -47,7 +53,7 @@ enum class GenerationFinishReason {
 
 struct GenerationResult {
     // request ID - obsolete when handle API is approved as handle will connect results with prompts.
-    uint64_t m_request_id;
+    uint64_t m_request_id = 0;
 
     // in a generic case we have multiple generation results per initial prompt
     // depending on sampling parameters (e.g. beam search or parallel sampling)
@@ -60,13 +66,19 @@ struct GenerationResult {
 
     // PerfMetrics
     PerfMetrics perf_metrics;
+
+    // PerfMetrics with pipeline specifics
+    // Applicable for pipelines with implemented extended metrics: SpeculativeDecoding Pipeline
+    // To get metrics, it should be cast to corresponding class for extended perf metrics from pipeline
+    // Cast to SDPerModelsPerfMetrics for SpeculativeDecoding
+    std::shared_ptr<ExtendedPerfMetrics> extended_perf_metrics;
 };
 
 struct GenerationOutput {
     std::vector<int64_t> generated_ids;
     std::vector<float> generated_log_probs;
-    float score;
-    GenerationFinishReason finish_reason;
+    float score = 0;
+    GenerationFinishReason finish_reason = GenerationFinishReason::NONE;
 };
 
 using GenerationOutputs = std::unordered_map<uint64_t, GenerationOutput>;

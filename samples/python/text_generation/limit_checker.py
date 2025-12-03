@@ -41,7 +41,9 @@ def retry_request(func, retries=5):
         "Timeout",
         "Time-out",
         "ServiceUnavailable",
-        "InternalServerError"
+        "InternalServerError",
+        "OSError",
+        "HTTPError",
     ]
 
     for attempt in range(retries):
@@ -49,16 +51,16 @@ def retry_request(func, retries=5):
             return func()
         except (CalledProcessError, RequestException, HfHubHTTPError) as e:
             if isinstance(e, CalledProcessError):
-                if any(pattern in e.stderr for pattern in network_error_patterns):
+                if e.stderr is not None and any(pattern in e.stderr for pattern in network_error_patterns):
                     logger.warning(f"CalledProcessError occurred: {e.stderr}")
                 else:
-                    raise e
+                    raise
             if attempt < retries - 1:
                 timeout = 2 ** attempt
                 logger.info(f"Attempt {attempt + 1} failed. Retrying in {timeout} seconds.")
                 time.sleep(timeout)
             else:
-                raise e
+                raise
 
 def load_prompts_dataset(file_name : str) -> dict[str, list[str]]:
     TESTS_ROOT = Path('tests/python_tests')
@@ -138,7 +140,7 @@ if __name__ == '__main__':
     parser.add_argument("--eviction_on", action='store_true', help="Whether to apply cache eviction")
     parser.add_argument("--model", type=str, help="Model ID")
     parser.add_argument("--num_kv_blocks", type=int, help='Number of blocks to statically pre-allocate in cache.'
-                                                          'If left unspecified, will allocate dynamically to accomodate the generation length.')
+                                                          'If left unspecified, will allocate dynamically to accommodate the generation length.')
     parser.add_argument("--report", type=str, help="File name for CSV-formatted export of limit search data")
     parser.add_argument("--mode", type=str, nargs='?', choices=['gen_length', 'gen_throughput'], required=True)
     parser.add_argument("--data", type=str, help="Dataset jsonl file")

@@ -88,7 +88,7 @@ protected:
     /**
      * Performs KV cache eviction is enabled / requireed
      */
-    void _maybe_evict_cache_blocks(const SchedulerConfig& sched_config);
+    void _maybe_evict_cache_blocks(const SchedulerConfig& sched_config, const Scheduler::Output& scheduler_output);
 
     void _register_step_cache_usage(float step_cache_usage);
     void _reset_cache_usage_statistics();
@@ -120,11 +120,12 @@ public:
 
     GenerationHandle add_request(uint64_t request_id,
                                  const ov::Tensor& input_ids,
-                                 ov::genai::GenerationConfig sampling_params) override;
+                                 const ov::genai::GenerationConfig& sampling_params,
+                                 std::optional<ov::Tensor> token_type_ids = std::nullopt) override;
 
     GenerationHandle add_request(uint64_t request_id,
                                  const std::string& prompt,
-                                 ov::genai::GenerationConfig sampling_params) override;
+                                 const ov::genai::GenerationConfig& sampling_params) override;
 
     bool has_non_finished_requests() override;
 
@@ -133,8 +134,9 @@ public:
     std::vector<EncodedGenerationResult>
     generate(const std::vector<ov::Tensor>& input_ids,
              const std::vector<GenerationConfig>& sampling_params,
-             const StreamerVariant& streamer) override;
-
+             const StreamerVariant& streamer,
+             const std::optional<std::vector<ov::Tensor>>& token_type_ids = std::nullopt,
+             const std::optional<std::vector<std::pair<ov::Tensor, std::optional<int64_t>>>>& position_ids_list = std::nullopt) override;
 
     /**
      * Updates LoRA adapters for current generation call

@@ -12,22 +12,33 @@ namespace genai {
 
 ov::genai::MeanStdPair calc_mean_and_std(const std::vector<ov::genai::MicroSeconds>& durations) {
     if (durations.size() == 0) {
-        return {-1, -1};
+        return {-1.0f, -1.0f};
     }
     // Accepts time durations in microseconds and returns standard deviation and mean in milliseconds.
-    float mean = std::accumulate(durations.begin(), durations.end(), 0.0f, 
-        [](const float& acc, const ov::genai::MicroSeconds& duration) -> float {
-            return acc + duration.count() / 1000.0f;
+    double mean = std::accumulate(durations.begin(), durations.end(), 0.0, 
+        [](const double& acc, const ov::genai::MicroSeconds& duration) -> double {
+            return acc + duration.count() / 1000.0;
         });
     mean /= durations.size();
     
-    float sum_square_durations = std::accumulate(durations.begin(), durations.end(), 0.0f,
-        [](const float& acc, const ov::genai::MicroSeconds& duration) -> float {
-            auto d = duration.count() / 1000.0f;
+    double sum_square_durations = std::accumulate(durations.begin(), durations.end(), 0.0,
+        [](const double& acc, const ov::genai::MicroSeconds& duration) -> double {
+            auto d = duration.count() / 1000.0;
             return acc + d * d;
         });
-    float std = std::sqrt(sum_square_durations / durations.size() - mean * mean);
-    return {mean, std};
+    double std = std::sqrt(sum_square_durations / durations.size() - mean * mean);
+    return {static_cast<float>(mean), static_cast<float>(std)};
+}
+
+ov::genai::SummaryStats calc_full_stat(const std::vector<ov::genai::MicroSeconds>& durations) {
+    if (durations.size() == 0) {
+        return {-1.0f, -1.0f, -1.0f, -1.0f};
+    }
+    auto meanstd = calc_mean_and_std(durations);
+    auto minmax = std::minmax_element(durations.begin(), durations.end());
+    float min = static_cast<float>(minmax.first->count() / 1000.0);
+    float max = static_cast<float>(minmax.second->count() / 1000.0);
+    return {meanstd.mean, meanstd.std, min, max};
 }
 
 float PerfMetrics::get_load_time() {
@@ -84,6 +95,16 @@ MeanStdPair PerfMetrics::get_inference_duration() {
     return inference_duration;
 }
 
+std::map<std::string, float> PerfMetrics::get_grammar_compiler_init_times() {
+    return grammar_compiler_init_times;
+}
+
+SummaryStats PerfMetrics::get_grammar_compile_time() {
+    evaluate_statistics();
+    return grammar_compile_time;
+}
+
+
 float PerfMetrics::get_microsec(std::chrono::steady_clock::duration duration) {
     return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
 }
@@ -97,11 +118,14 @@ void PerfMetrics::evaluate_statistics(std::optional<TimePoint> start_time) {
         auto start_time_val = *start_time;
         auto& tok_times = raw_metrics.m_new_token_times;
         auto& batch_sizes = raw_metrics.m_batch_sizes;
+
+        raw_metrics.m_durations.clear();
         raw_metrics.m_durations.reserve(tok_times.size());
 
         auto ttft = tok_times[0] - start_time_val;
         raw_metrics.m_times_to_first_token.clear();
         raw_metrics.m_times_to_first_token.emplace_back(ttft);
+
         num_generated_tokens = batch_sizes[0];
 
         // The very first infer request (prefill stage) is slower than subsequent ones since we process a sequence of tokens.
@@ -110,7 +134,11 @@ void PerfMetrics::evaluate_statistics(std::optional<TimePoint> start_time) {
         // to the second token, not from the start time to the first token.
         for (size_t i = 1; i < tok_times.size(); ++i) {
             // If in 10 ms a batch of 5 new tokens is generated then TPOT is 10 / 5 = 2 tok/ms.
-            raw_metrics.m_durations.emplace_back((tok_times[i] - tok_times[i - 1]) / batch_sizes[i]);
+            // Then put the value 5 times to have the correct proportion of this when calculating the TPOT,
+            // it helpful in cases where the batch_sizes is not equable
+            for (size_t y = 0; y < batch_sizes[i]; y++) {
+                raw_metrics.m_durations.emplace_back((tok_times[i] - tok_times[i - 1]) / batch_sizes[i]);
+            }
             num_generated_tokens += batch_sizes[i];
         }
     }
@@ -119,6 +147,8 @@ void PerfMetrics::evaluate_statistics(std::optional<TimePoint> start_time) {
     tpot = calc_mean_and_std(raw_metrics.m_durations);
     ipot = calc_mean_and_std(raw_metrics.m_token_infer_durations);
     ttft = calc_mean_and_std(raw_metrics.m_times_to_first_token);
+
+    grammar_compile_time = calc_full_stat(raw_metrics.m_grammar_compile_times);
 
     generate_duration = calc_mean_and_std(raw_metrics.generate_durations);
     tokenization_duration = calc_mean_and_std(raw_metrics.tokenization_durations);
@@ -132,9 +162,22 @@ void PerfMetrics::evaluate_statistics(std::optional<TimePoint> start_time) {
 
 PerfMetrics PerfMetrics::operator+(const PerfMetrics& right) const {
     OPENVINO_ASSERT(right.load_time == load_time, "generation metrics can be accumulated only for the same pipeline");
-    
+
     // Copy left value to res.
     PerfMetrics res = *this;
+    
+    // maps with grammar compiler init times should not have conflicting keys
+    // {{"xgrammar", 10}} + {{"llmguidance", 20}} = {{"grammar", 10}, {"llmguidance", 20}} - is OK!
+    // {{"xgrammar", 10}} + {{"xgrammar", 10}} = {{"xgrammar", 10}} - is OK!
+    // {{"xgrammar", 10}} + {{"xgrammar", 20}} = is NOT OK! Fails on assert!
+    for (const auto& [key, value] : right.grammar_compiler_init_times) {
+        auto it = res.grammar_compiler_init_times.find(key);
+        if (it != res.grammar_compiler_init_times.end()) {
+            OPENVINO_ASSERT(it->second == value, "Grammar compiler init time for the same backend should be the same. ", 
+                                                 "You are trying to accumulate metrics for different pipelines which is not allowed.");
+        }
+        res.grammar_compiler_init_times[key] = value;
+    }
 
     // Concatenate durations, batch_sizes first token times.
     auto& new_durations = res.raw_metrics.m_durations;
@@ -165,6 +208,10 @@ PerfMetrics PerfMetrics::operator+(const PerfMetrics& right) const {
     new_tok_durations.insert(new_tok_durations.end(), right_tok_durations.begin(), right_tok_durations.end());
     new_detok_durations.insert(new_detok_durations.end(), right_detok_durations.begin(), right_detok_durations.end());
     new_gen_durations.insert(new_gen_durations.end(), right_gen_durations.begin(), right_gen_durations.end());
+
+    // Concatenate structured output compilation times.
+    auto& new_grammar_compile_times = res.raw_metrics.m_grammar_compile_times;
+    new_grammar_compile_times.insert(new_grammar_compile_times.end(), right.raw_metrics.m_grammar_compile_times.begin(), right.raw_metrics.m_grammar_compile_times.end());
 
     res.num_generated_tokens += right.num_generated_tokens;
     res.num_input_tokens += right.num_input_tokens;

@@ -5,6 +5,7 @@ This example showcases inference of text-generation Vision Language Models (VLMs
 There are two sample files:
  - [`visual_language_chat.py`](./visual_language_chat.py) demonstrates basic usage of the VLM pipeline.
  - [`benchmark_vlm.py`](./benchmark_vlm.py) shows how to benchmark a VLM in OpenVINO GenAI. The script includes functionality for warm-up iterations, generating text and calculating various performance metrics.
+ - [`milebench_eval_vlm.py`](./milebench_eval_vlm.py) provides MileBench validation for VLMs, enabling evaluation of image–text reasoning and visual QA tasks across multiple subsets designed to assess the MultImodal Long-contExt capabilities of MLLMs.
 
 ## Download and convert the model and tokenizers
 
@@ -14,7 +15,28 @@ Install [../../export-requirements.txt](../../export-requirements.txt) to conver
 
 ```sh
 pip install --upgrade-strategy eager -r ../../export-requirements.txt
+```
+
+Then, run the export with Optimum CLI:
+
+```sh
 optimum-cli export openvino --model openbmb/MiniCPM-V-2_6 --trust-remote-code MiniCPM-V-2_6
+```
+
+Alternatively, you can do it in Python code:
+
+```python
+from optimum.exporters.openvino.convert import export_tokenizer
+from optimum.intel import OVModelForVisualCausalLM
+from transformers import AutoTokenizer
+
+output_dir = "MiniCPM-V-2_6"
+
+model = OVModelForVisualCausalLM.from_pretrained("openbmb/MiniCPM-V-2_6", export=True, trust_remote_code=True)
+model.save_pretrained(output_dir)
+
+tokenizer = AutoTokenizer.from_pretrained("openbmb/MiniCPM-V-2_6")
+export_tokenizer(tokenizer, output_dir)
 ```
 
 ## Run:
@@ -40,7 +62,8 @@ python benchmark_vlm.py [OPTIONS]
 ### Options
 
 - `-m, --model`(default: `.`): Path to the model and tokenizers base directory.
-- `-p, --prompt` (default: `What is on the image?`): The prompt to generate text.
+- `-p, --prompt` (default: `None`): The prompt to generate text. If without `-p` and `-pf`, the default prompt is `"What is on the image?"`
+- `-pf, --prompt_file` Read prompt from file.
 - `-i, --image` (default: `image.jpg`): Path to the image.
 - `-nw, --num_warmup` (default: `1`): Number of warmup iterations.
 - `-mt, --max_new_tokens` (default: `20`): Maximal number of new tokens.

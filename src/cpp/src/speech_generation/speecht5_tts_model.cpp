@@ -132,7 +132,7 @@ Text2SpeechDecodedResults SpeechT5TTSImpl::generate(const std::vector<std::strin
 
     Text2SpeechDecodedResults gen_speech_res;
 
-    auto& tokenization_durations = m_perf_metrics.raw_metrics.tokenization_durations;
+    auto& tokenization_durations = gen_speech_res.perf_metrics.raw_metrics.tokenization_durations;
     const auto generation_start = std::chrono::steady_clock::now();
     for (const auto& text : texts) {
         const auto tokenization_start = std::chrono::steady_clock::now();
@@ -154,8 +154,9 @@ Text2SpeechDecodedResults SpeechT5TTSImpl::generate(const std::vector<std::strin
 
         // prepare inputs for decoder
         std::vector<float> zeros(bsz * 1 * m_num_mel_bins, 0.0f);
+        std::vector<float> empty_spectrogram;
         ov::Tensor inputs_embeds(ov::element::f32, ov::Shape{bsz, 1, m_num_mel_bins}, zeros.data());
-        ov::Tensor spectrogram(ov::element::f32, ov::Shape{0, bsz, 2, m_num_mel_bins}, std::vector<float>{}.data());
+        ov::Tensor spectrogram(ov::element::f32, ov::Shape{0, bsz, 2, m_num_mel_bins}, empty_spectrogram.data());
 
         int64_t iter = 0;
         // decoder loop
@@ -189,18 +190,18 @@ Text2SpeechDecodedResults SpeechT5TTSImpl::generate(const std::vector<std::strin
         }
         auto waveform = vocoder(m_vocoder, spectrogram, raw_perf_metrics);
 
-        m_perf_metrics.num_generated_samples += waveform.get_size();
+        gen_speech_res.perf_metrics.num_generated_samples += waveform.get_size();
 
         gen_speech_res.speeches.push_back(waveform);
         m_decoder->reset_state();
     }
 
     const auto generation_end = std::chrono::steady_clock::now();
-    m_perf_metrics.raw_metrics.generate_durations.emplace_back(
+    gen_speech_res.perf_metrics.raw_metrics.generate_durations.emplace_back(
         PerfMetrics::get_microsec(generation_end - generation_start));
 
-    m_perf_metrics.evaluate_statistics();
-    gen_speech_res.perf_metrics = m_perf_metrics;
+    gen_speech_res.perf_metrics.evaluate_statistics();
+    m_perf_metrics = gen_speech_res.perf_metrics;
     return gen_speech_res;
 }
 

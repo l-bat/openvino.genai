@@ -1,6 +1,6 @@
 # C++ visual language chat
 
-This example showcases inference of Visual language models (VLMs): [`openbmb/MiniCPM-V-2_6`](https://huggingface.co/openbmb/MiniCPM-V-2_6). The application doesn't have many configuration options to encourage the reader to explore and modify the source code. For example, change the device for inference to GPU. The sample features `ov::genai::VLMPipeline` and runs the simplest deterministic greedy sampling algorithm. There is also a Jupyter [notebook](https://github.com/openvinotoolkit/openvino_notebooks/tree/latest/notebooks/minicpm-v-multimodal-chatbot) which provides an example of Visual-language assistant.
+This example showcases inference of Visual language models (VLMs). The application doesn't have many configuration options to encourage the reader to explore and modify the source code. For example, change the device for inference to GPU. The sample features `ov::genai::VLMPipeline` and runs the simplest deterministic greedy sampling algorithm. There is also a Jupyter [notebook](https://github.com/openvinotoolkit/openvino_notebooks/tree/latest/notebooks/minicpm-v-multimodal-chatbot) which provides an example of Visual-language assistant.
 
 
 There are two sample files:
@@ -29,7 +29,7 @@ Follow [Get Started with Samples](https://docs.openvino.ai/2025/get-started/lear
 
 Discrete GPUs (dGPUs) usually provide better performance compared to CPUs. It is recommended to run larger models on a dGPU with 32GB+ RAM. For example, the model `llava-hf/llava-v1.6-mistral-7b-hf` can benefit from being run on a dGPU. Modify the source code to change the device for inference to the `GPU`.
 
-See [SUPPORTED_MODELS.md](../../../SUPPORTED_MODELS.md#visual-language-models) for the list of supported models.
+Refer to the [Supported Models](https://openvinotoolkit.github.io/openvino.genai/docs/supported-models/#visual-language-models-vlms) for more details.
 
 ## Run benchmark:
 
@@ -40,7 +40,8 @@ benchmark_vlm [OPTIONS]
 ### Options
 
 - `-m, --model`(default: `.`): Path to the model and tokenizers base directory.
-- `-p, --prompt` (default: `What is on the image?`): The prompt to generate text.
+- `-p, --prompt` (default: ''): The prompt to generate text. If without `-p` and `--pf`, the default prompt is `"What is on the image?"`
+- `--pf, --prompt_file` Read prompt from file.
 - `-i, --image` (default: `image.jpg`): Path to the image.
 - `-nw, --num_warmup` (default: `1`): Number of warmup iterations.
 - `-mt, --max_new_tokens` (default: `20`): Maximal number of new tokens.
