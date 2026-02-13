@@ -67,7 +67,7 @@ class Text2ImageEvaluator(BaseEvaluator):
         self.empty_adapters = empty_adapters
 
         if base_model:
-            base_model.resolution = self.resolution
+            # base_model.resolution = self.resolution
             self.gt_data = self._generate_data(
                 base_model, gen_image_fn, os.path.join(self.gt_dir, "reference")
             )
@@ -86,7 +86,7 @@ class Text2ImageEvaluator(BaseEvaluator):
         if isinstance(model_or_data, str) and os.path.exists(model_or_data):
             predictions = pd.read_csv(model_or_data, keep_default_na=False)
         else:
-            model_or_data.resolution = self.resolution
+            # model_or_data.resolution = self.resolution
             predictions = self._generate_data(
                 model_or_data, gen_image_fn, image_folder
             )

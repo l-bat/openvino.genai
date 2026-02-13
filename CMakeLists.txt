@@ -98,7 +98,7 @@ endif()
 if(EXISTS "${OpenVINOGenAI_SOURCE_DIR}/tools/continuous_batching" AND ENABLE_TOOLS)
     add_subdirectory(tools/continuous_batching)
 endif()
-if(EXISTS "${OpenVINOGenAI_SOURCE_DIR}/tests/cpp" AND ENABLE_TESTS)
+if(EXISTS "${OpenVINOGenAI_SOURCE_DIR}/tests/cpp")
     add_subdirectory(tests/cpp)
 endif()
 

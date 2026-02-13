@@ -157,6 +157,9 @@ if(ENABLE_XGRAMMAR)
         if(MSVC)
             # Suppress C4146 warning for MSVC compiler
             target_compile_options(xgrammar PRIVATE "/wd4146")
+        else()
+            # Disable -Werror for xgrammar to avoid third-party warnings
+            target_compile_options(xgrammar PRIVATE "-Wno-error")
         endif()
     endif()
 else()
