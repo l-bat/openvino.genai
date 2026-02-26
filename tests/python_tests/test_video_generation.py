@@ -223,6 +223,26 @@ class TestAutoEncoderKLLTXVideo:
             assert hasattr(config, "scaling_factor")
 
 
+class TestTaylorSeer:
+    def test_taylorseer_custom_config(self, video_generation_model):
+        """Test TaylorSeer with custom cache configuration."""
+        pipe = ov_genai.Text2VideoPipeline(video_generation_model, "CPU")
+
+        taylorseer_config = ov_genai.TaylorSeerCacheConfig()
+        taylorseer_config.cache_interval = 3
+        taylorseer_config.disable_cache_before_step = 2
+        taylorseer_config.disable_cache_after_step = -1
+
+        result = pipe.generate(
+            "test prompt",
+            height=32,
+            width=32,
+            num_frames=9,
+            num_inference_steps=4,
+            taylorseer_config=taylorseer_config,
+        )
+        assert result.video is not None
+
 class TestText2VideoPipelineAdvanced:
     def test_reshape(self, video_generation_model):
         pipe = ov_genai.Text2VideoPipeline(video_generation_model)

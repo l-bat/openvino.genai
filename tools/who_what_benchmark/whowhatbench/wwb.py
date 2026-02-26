@@ -322,7 +322,7 @@ def parse_args():
         type=str,
         default=None,
         help="Path to the JSON file or JSON string that contains TaylorSeer cache configuration "
-        "for GenAI text-to-image pipeline. JSON should contain keys: 'cache_interval', 'disable_cache_before_step', "
+        "for GenAI text-to-image and text-to-video pipelines. JSON should contain keys: 'cache_interval', 'disable_cache_before_step', "
         "'disable_cache_after_step'."
     )
 
@@ -888,16 +888,16 @@ def main():
             logger.info(f"draft_cb_config: {draft_cb_config}")
         kwargs["draft_cb_config"] = draft_cb_config
 
-    # Create TaylorSeerCacheConfig for text-to-image pipelines
+    # Create TaylorSeerCacheConfig for text-to-image and text-to-video pipelines
     taylorseer_config = None
-    if args.taylorseer_config and args.genai and args.model_type == "text-to-image":
+    if args.taylorseer_config and args.genai and args.model_type in ["text-to-image", "text-to-video"]:
         ts_cfg = get_json_config(args.taylorseer_config)
-        logger.info(f"taylorseer_config: {ts_cfg}")
         taylorseer_config = openvino_genai.TaylorSeerCacheConfig(
             cache_interval=ts_cfg.get("cache_interval", 3),
             disable_cache_before_step=ts_cfg.get("disable_cache_before_step", 6),
             disable_cache_after_step=ts_cfg.get("disable_cache_after_step", -2)
         )
+        logger.info(f"taylorseer_config: {taylorseer_config}")
 
     if args.gt_data and os.path.exists(args.gt_data):
         evaluator = create_evaluator(None, args)

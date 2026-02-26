@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "openvino/genai/image_generation/generation_config.hpp"
+#include "openvino/genai/taylorseer_config.hpp"
 
 
 namespace ov::genai {
@@ -56,6 +57,11 @@ struct VideoGenerationConfig {
     /// Video frame rate. Affects rope_interpolation_scale. Any value can be used although positive
     /// non-infinity makes the most sense. NaN corresponds to model default which is 25.0f for LTX-Video.
     std::optional<float> frame_rate = std::nullopt;
+
+    /**
+     * TaylorSeer configuration for video generation models
+     */
+    std::optional<TaylorSeerCacheConfig> taylorseer_config;
 };
 
 /**
