@@ -17,6 +17,7 @@ class TestTaylorSeerText2Image:
         "convert_model, sample_args",
         [
             pytest.param("tiny-random-flux", PROMPT),
+            pytest.param("stable-diffusion-3-tiny-random", PROMPT),
         ],
         indirect=["convert_model"],
     )

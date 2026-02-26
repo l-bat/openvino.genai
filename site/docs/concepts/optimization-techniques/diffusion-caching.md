@@ -67,4 +67,4 @@ res = pipe.generate(prompt, num_inference_steps=28)
 * Speedup scales with transformer computation intensity, input resolution and number of inference steps.
 
 ## Current Limitations
-* The current implementation supports Flux models only; support for other models will be added in subsequent releases.
+* The current implementation supports Flux and StableDiffusion3 models only; support for other models will be added in subsequent releases.

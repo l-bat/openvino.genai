@@ -317,6 +317,14 @@ def parse_args():
         "a value of 0 disables relevance weighting, while higher values (up to 1.0) emphasize relevance, "
         "making pruning more conservative on borderline tokens.",
     )
+    parser.add_argument(
+        "--taylorseer-config",
+        type=str,
+        default=None,
+        help="Path to the JSON file or JSON string that contains TaylorSeer cache configuration "
+        "for GenAI text-to-image pipeline. JSON should contain keys: 'cache_interval', 'disable_cache_before_step', "
+        "'disable_cache_after_step'."
+    )
 
     return parser.parse_args()
 
@@ -880,6 +888,17 @@ def main():
             logger.info(f"draft_cb_config: {draft_cb_config}")
         kwargs["draft_cb_config"] = draft_cb_config
 
+    # Create TaylorSeerCacheConfig for text-to-image pipelines
+    taylorseer_config = None
+    if args.taylorseer_config and args.genai and args.model_type == "text-to-image":
+        ts_cfg = get_json_config(args.taylorseer_config)
+        logger.info(f"taylorseer_config: {ts_cfg}")
+        taylorseer_config = openvino_genai.TaylorSeerCacheConfig(
+            cache_interval=ts_cfg.get("cache_interval", 3),
+            disable_cache_before_step=ts_cfg.get("disable_cache_before_step", 6),
+            disable_cache_after_step=ts_cfg.get("disable_cache_after_step", -2)
+        )
+
     if args.gt_data and os.path.exists(args.gt_data):
         evaluator = create_evaluator(None, args)
     else:
@@ -892,6 +911,12 @@ def main():
             args.genai,
             **kwargs,
         )
+        # Set TaylorSeer config via generation config if applicable
+        if taylorseer_config is not None and base_model is not None:
+            generation_config = base_model.get_generation_config()
+            generation_config.taylorseer_config = taylorseer_config
+            base_model.set_generation_config(generation_config)
+
         evaluator = create_evaluator(base_model, args)
 
         if args.gt_data:
@@ -916,6 +941,12 @@ def main():
                 args.llamacpp,
                 **kwargs
             )
+            # Set TaylorSeer config via generation config if applicable
+            if taylorseer_config is not None and target_model is not None:
+                generation_config = target_model.get_generation_config()
+                generation_config.taylorseer_config = taylorseer_config
+                target_model.set_generation_config(generation_config)
+
             all_metrics_per_question, all_metrics = evaluator.score(
                 target_model,
                 evaluator.get_generation_fn() if args.genai or args.llamacpp else None,
